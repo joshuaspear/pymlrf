@@ -16,6 +16,7 @@ from offline_rl_ope.components.Policy import BehavPolicy
 
 from pymlrf.api.d3rlpy import (epochs_to_steps)
 from pymlrf.ModelTracking import get_create_tracker, Experiment, Option
+from pymlrf.utils import set_seed
 
 HERE = pathlib.Path(__file__).parent
 root_dir = os.path.join(HERE, "tmp_rl_train_example")
@@ -34,7 +35,7 @@ def training_loop(
     save_dir,
     seed=1
     ):
-    d3rlpy.seed(seed)
+    set_seed(seed)
     # start training
     n_steps, n_steps_per_epoch = epochs_to_steps(
         epochs=epochs, n_obs=n_obs, batch_size=batch_size)
