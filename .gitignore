@@ -612,3 +612,4 @@ MigrationBackup/
 # End of https://www.toptal.com/developers/gitignore/api/pycharm,python,visualstudiocode,visualstudio
 
 .DS_Store
+tmp*

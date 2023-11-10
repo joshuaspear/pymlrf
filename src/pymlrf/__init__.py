@@ -1,7 +1,10 @@
 import logging
 import os
 
-logging_name = ""
+from . import FileSystem, ModelTracking, Dataset
+from .SerialisableConfig import *
+
+logging_name = "pymlrf"
 
 class CustomFormatter(logging.Formatter):
 
@@ -35,12 +38,8 @@ console_handler.setLevel(logging.DEBUG)
 console_handler.setFormatter(CustomFormatter())
 logger.addHandler(console_handler)
 
-env_name = ""
-
 try:
-    if env_name == "":
-        raise KeyError("env_name variable set to '' in __init__")
-    home_path = os.environ[env_name]
+    home_path = os.environ[logging_name]
     file_handler = logging.FileHandler(
         os.path.join(home_path, "{}_log.txt".format(logging_name)))
     file_handler.setFormatter(CustomFormatter())
@@ -49,5 +48,5 @@ try:
     logger.debug("Logging file successfully identified")
 except KeyError:
     logger.warning(
-        "{} environment variable not set. Logging to file will not be performed".format(env_name))
+        "{} environment variable not set. Logging to file will not be performed".format(logging_name))
 

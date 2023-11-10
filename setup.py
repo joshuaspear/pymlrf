@@ -8,7 +8,7 @@ HERE = pathlib.Path(__file__).parent
 README = (HERE / "README.md").read_text()
 
 setuptools.setup(
-    name='temp_name',
+    name='pymlrf',
     version='1.0.0',
     description="",
     long_description=README,
