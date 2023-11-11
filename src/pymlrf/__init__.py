@@ -1,8 +1,7 @@
 import logging
 import os
 
-from . import FileSystem, ModelTracking, Dataset
-from .SerialisableConfig import *
+from . import FileSystem, ModelTracking, Dataset, SerialisableConfig
 
 logging_name = "pymlrf"
 

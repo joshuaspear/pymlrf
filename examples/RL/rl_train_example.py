@@ -15,7 +15,7 @@ from offline_rl_ope.api.d3rlpy import (ISCallback, ISEstimatorScorer)
 from offline_rl_ope.components.Policy import BehavPolicy
 
 from pymlrf.api.d3rlpy import (epochs_to_steps)
-from pymlrf.ModelTracking import get_create_tracker, Experiment, Option
+from pymlrf.ModelTracking import Experiment, Option, SerialisedTracker
 from pymlrf.utils import set_seed
 
 HERE = pathlib.Path(__file__).parent
@@ -139,9 +139,11 @@ def main():
     gbt_policy_be = BehavPolicy(policy_class=gbt_est, collect_res=False)
 
     tracker_path=os.path.join(root_dir,"model_tracker.json")
-    tracker = get_create_tracker(
-        tracker_path=tracker_path
-    )
+    tracker = SerialisedTracker(path=tracker_path)
+    if tracker.is_created:
+        tracker.read()
+    else:
+        print("Tracker not yet created at location")
     
     exp_1 = Experiment(exp_name="dqn_exp", parent_loc=root_dir, mt=tracker)
     exp_1.status_check()

@@ -3,7 +3,7 @@ import logging
 from typing import Any, Callable, Dict
 
 from ..FileSystem.DirectoryHandler import DirectoryHandler
-from .Tracker import ModelTracker
+from .Tracker import Tracker
 from .utils import Option
 
 
@@ -13,7 +13,7 @@ __all__ = ["Experiment"]
 
 class Experiment(DirectoryHandler):
     
-    def __init__(self, exp_name: str, parent_loc: str, mt: ModelTracker):
+    def __init__(self, exp_name: str, parent_loc: str, mt: Tracker):
         super().__init__(loc=os.path.join(parent_loc, exp_name))
         self._mt = mt
         self._exp_name = exp_name

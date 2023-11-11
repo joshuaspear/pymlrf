@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import List
-from ..SerialisableConfig import SerialisableConfig
+from ..SerialisableConfig.base import SerialisableConfig
 
 
 __all__ = ["DiscreteFeature", "ContinuousFeature"]

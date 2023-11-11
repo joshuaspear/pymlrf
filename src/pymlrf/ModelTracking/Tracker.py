@@ -9,26 +9,26 @@ from ..FileSystem import FileHandler
 logger = logging.getLogger("pymlrf")
 
 __all__ = [
-    "ModelTracker"
+    "Tracker",
+    "SerialisedTracker"
 ]
 
-class ModelTracker(FileHandler):
+
+class Tracker:
     
-    _error_value = "RUN_ERROR"
+    _error_value:str = "RUN_ERROR"
     
-    def __init__(self, path:str, u_id:str="model_name"):
+    def __init__(self, u_id:str="model_name"):
         """Class representing a 'model tracker'. 
         self.rows is a list dictionaries where each dictionary is of the form 
         {column_name: value} and each dictionary represents an individual 
         experiment
         self.column_names is a list of unique column_name value from self.rows
-        
         """
-        super().__init__(path=path)
         self.rows:List[Dict[str,Any]] = []
         self.column_names:List[str] = []
         self.u_id:str = u_id
-
+        
     def _get_check_consistent_col_names(self, new_row_col_names:list, 
                                         force_columns:bool=False) -> set:
         """Method is used check whether the column names provided in 
@@ -69,8 +69,7 @@ class ModelTracker(FileHandler):
                 row_dict = {col:self._error_value for col in self.column_names}
                 row_dict[self.u_id] = u_id
                 self.update_tracker_w_dict(row_dict=row_dict)
-        
-            
+                
     def write_u_id(self, u_id_update:Callable):
         """Writes a column to each row named self.u_id according to the function
         provided in u_id_update. Useful when a tracker has previously been 
@@ -144,19 +143,6 @@ class ModelTracker(FileHandler):
         for idx in dupe_indices:
             del self.rows[idx]
         
-
-    # def tracker_to_csv(self, csv_dir:str, **kwargs):
-    #     """Saves the tracker i.e. values in self.rows as a csv. This is performed 
-    #     via pandas. kwargs should contain options defined in 
-    #     pd.DataFrame.to_csv()
-        
-
-    #     Args:
-    #         csv_dir (str): File location of where to save the output csv
-    #     """
-    #     dict_df = self.tracker_to_pandas_df()
-    #     dict_df.to_csv(csv_dir, **kwargs)
-
     def import_existing_pandas_df_tracker(
         self, exstng_track_df:pd.DataFrame, **kwargs
         ):
@@ -173,42 +159,13 @@ class ModelTracker(FileHandler):
         for row in exstng_track_dict:
             self.update_tracker_w_dict(row, **kwargs)
 
-    # def import_existing_csv_tracker(self, existing_tracker_path:str, imprt_kwargs:dict = {}, rd_csv_kwargs:dict = {}):
-    #     """Takes as an input a csv representing and model tracker and updates 
-    #     self with values from the csv. This is performed via pandas. 
 
-    #     Args:
-    #         existing_tracker_path (str): File location of the csv tracker
-    #         imprt_kwargs (dict): kwargs to provide to 
-    #         self.import_existing_pandas_df_tracker. Defaults to {}.
-    #         rd_csv_kwargs (dict): kwargs to provide to pd.read_csv. 
-    #         Defaults to {}.
-    #     """
-    #     exstng_track_df = pd.read_csv(existing_tracker_path, **rd_csv_kwargs)
-    #     self.import_existing_pandas_df_tracker(exstng_track_df, **imprt_kwargs)
-
-    # def update_existing_csv_tracker(self, existing_tracker_path:str, 
-    #                                 imprt_kwargs:dict = {}, 
-    #                                 rd_csv_kwargs:dict = {}, 
-    #                                 wrt_csv_kwargs:dict = {}):
-    #     """Imports a csv file representing a model tracker, updates it with the 
-    #     observations captured in self and re-writes the csv
-
-    #     Args:
-    #         existing_tracker_path (str): File location of the csv tracker
-    #         imprt_kwargs (dict, optional): kwargs to provide to 
-    #         self.import_existing_pandas_df_tracker. Defaults to {}.
-    #         rd_csv_kwargs (dict, optional): kwargs to provide to pd.read_csv. 
-    #         Defaults to {}.
-    #         wrt_csv_kwargs (dict, optional): kwargs to provide to 
-    #         pd.DataFrame.to_csv. Defaults to {}.
-    #     """
-    #     self.import_existing_csv_tracker(
-    #         existing_tracker_path=existing_tracker_path, 
-    #         imprt_kwargs=imprt_kwargs, rd_csv_kwargs=rd_csv_kwargs)
-    #     self.tracker_to_csv(existing_tracker_path, index=False, 
-    #                         **wrt_csv_kwargs)
-
+class SerialisedTracker(Tracker, FileHandler):
+    
+    def __init__(self, path:str, u_id:str="model_name"):
+        FileHandler.__init__(self, path=path)
+        Tracker.__init__(self, u_id=u_id)
+    
     def write(self, **kwargs):
         """Saves the tracker i.e. values in self.rows as a json. This is 
         performed via pandas. kwargs should contain options defined in 
