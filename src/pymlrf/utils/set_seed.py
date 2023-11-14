@@ -34,7 +34,7 @@ pkg_seed_lkp = {
         torch.manual_seed,
         torch.cuda.manual_seed
         ],
-    "d3rlpy": d3rlpy.seed
+    "d3rlpy": [d3rlpy.seed]
 }
 
 if "d3rlpy" in pkg_imports:
