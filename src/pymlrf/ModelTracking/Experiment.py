@@ -51,6 +51,7 @@ class Experiment(DirectoryHandler):
         option:Option, 
         func:Callable[[Any], Dict[str,Any]],
         force_columns=True,
+        meta_data:Dict[str,Any] = {},
         *args, 
         **kwargs
         ) -> Dict[str,Any]:
@@ -70,7 +71,7 @@ class Experiment(DirectoryHandler):
                     )
             else:
                 self.create()
-        res = {}
+        res = {**meta_data}
         res[self._mt.u_id] = self._exp_name
         try:
             res = {**res, **func(*args, **kwargs)}

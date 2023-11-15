@@ -1,7 +1,7 @@
 import logging
 import os
 
-from . import FileSystem, ModelTracking, Dataset, SerialisableConfig
+from . import FileSystem, ModelTracking, Dataset, SerialisableConfig, api
 
 logging_name = "pymlrf"
 
