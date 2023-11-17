@@ -77,12 +77,22 @@ class EarlyStopperPassThru(EarlyStopper):
 
 class PercEpsImprove:
     
-    def __init__(self, eps) -> None:
+    __dir_lkp = {
+        "ls": lambda a,b: a<b,
+        "gr": lambda a,b: a>b
+    }
+    
+    def __init__(
+        self, 
+        eps, 
+        direction:Literal["ls", "gr"] = "ls"
+        ) -> None:
         self.__eps = eps
+        self.__dir = self.__dir_lkp[direction]
     
     def __call__(self, curr, prev):
         # Assumes the previous loss is greater than the current loss. If it is 
         # not, i.e. the validation loss begins to increase, the training will
         # terminate. If the percentage change is loss is less than epsilon, the
         # training will terminate. 
-        return (prev-curr)/prev < self.__eps
+        return self.__dir((prev-curr)/prev, self.__eps)
