@@ -13,7 +13,7 @@ from .Metric import MetricOrchestrator
 from .EarlyStopper import (
     EarlyStopper, EarlyStopperPassThru, EarlyStoppingException
     )
-from ..utils import set_seed
+from ...utils import set_seed
 
 __all__ = [
     "train_single_epoch",

@@ -1,8 +1,7 @@
-import logging
 import numpy as np
 from typing import Callable, Literal
 
-logger = logging.getLogger("dtr_renal")
+from .. import logger
 
 __all__ = [
     "EarlyStopper", 
