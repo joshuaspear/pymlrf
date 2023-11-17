@@ -39,7 +39,7 @@ class EarlyStopper:
         raise Exception("Stopping criteria reached")
     
     def __cptr(self):
-        self.optimal_epoch = self.__epochs[-1]
+        self.optimal_epoch = self.__epochs[-2]
         self.__stopping_func = pss_thr_stp_func_false
         
     
