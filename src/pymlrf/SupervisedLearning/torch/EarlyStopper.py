@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Callable, Literal
 
-from .. import logger
+from ... import logger
 
 __all__ = [
     "EarlyStopper", 
