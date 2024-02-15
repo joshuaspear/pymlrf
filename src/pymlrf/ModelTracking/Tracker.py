@@ -101,6 +101,7 @@ class Tracker:
             row_idx = self.get_cur_row_index(u_id=row_dict[self.u_id])
             logger.warn(
                 "Model already exists in tracker, overwriting relevant values")
+            logger.debug(f"Inserting row with u_id: {row_dict}")
             old_row = self.rows.pop(row_idx)
             for i in row_dict:
                 old_row[i] = row_dict[i]
