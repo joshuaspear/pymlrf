@@ -59,6 +59,8 @@ class Experiment(DirectoryHandler):
         if option.option == "overwrite":
             self.delete()
             self.create()
+        if option.option == "update":
+            pass
         elif option.option == "duplicate":
             raise ValueError
         elif option.option == "error":
