@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 from ..FileSystem.DirectoryHandler import DirectoryHandler
 from .Tracker import Tracker
@@ -13,8 +13,18 @@ __all__ = ["Experiment"]
 
 class Experiment(DirectoryHandler):
     
-    def __init__(self, exp_name: str, parent_loc: str, mt: Tracker):
-        super().__init__(loc=os.path.join(parent_loc, exp_name))
+    def __init__(
+        self, 
+        exp_name: str, 
+        parent_loc: str, 
+        mt: Tracker, 
+        exp_folder_nm: Optional[str] = None
+        ):
+        if exp_folder_nm is None:
+            exp_folder_nm = exp_name
+        super().__init__(
+            loc=os.path.join(parent_loc, exp_folder_nm)
+            )
         self._mt = mt
         self._exp_name = exp_name
         self._status = False
