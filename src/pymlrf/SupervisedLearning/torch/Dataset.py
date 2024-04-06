@@ -1,18 +1,20 @@
+from dataclasses import dataclass
 import torch
+from typing import Dict
 
 __all__ = [
     "DatasetOutput"
     ]
 
+@dataclass
 class DatasetOutput:
-    
-    def __init__(self, input:torch.Tensor, output:torch.Tensor) -> None:
-        """Class for defining standarised output from DataLoaders
+    """Class for defining standarised output from DataLoaders
 
-        Args:
-            input (Any): The input to the model forward
-            output (Any): The output to be passed to the loss function
-        """
-        self.input = input
-        self.output = output
+    Args:
+        input (Dict[str,torch.Tensor]): The input to the model forward
+        output (Dict[str,torch.Tensor]): The output to be passed to the loss 
+        function
+    """
+    input:Dict[str,torch.Tensor]
+    output:Dict[str,torch.Tensor]
         

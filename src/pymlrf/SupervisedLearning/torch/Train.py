@@ -130,7 +130,8 @@ def train(
     es_action:Literal["stop", "capture"]="capture", 
     train_epoch_func:Callable=train_single_epoch, 
     val_epoch_func:Callable=validate_single_epoch,
-    seed: int = None
+    seed: int = None,
+    mo: MetricOrchestrator = MetricOrchestrator()
     ) -> MetricOrchestrator:
     
     if seed is not None:
@@ -142,11 +143,14 @@ def train(
     # if not isinstance(first_val, DatasetOutput):
     #     raise Exception("Dataloader should provide instances of type DatasetOutput")
     
-    # Resetting orchestrators for new training run
-    mo = MetricOrchestrator()
-    mo.reset_orchestrator()
-    mo.setup_orchestrator(name_trans_dict={
-        "epoch_train_loss":{}, "epoch_val_loss":{}})
+    mo.add_metric(
+        nm="epoch_train_loss",
+        rll_trans={}
+        )
+    mo.add_metric(
+        nm="epoch_val_loss",
+        rll_trans={}
+        )
     
     if early_stopping_func:
         es = EarlyStopper(stopping_func=early_stopping_func, action=es_action)

@@ -40,7 +40,11 @@ class Metric:
             self.roll_trans_values[trans_lab][label] = self.roll_trans[
                 trans_lab](list(self.value_dict.values()))
         
-    def add_roll_trans(self, label:str, trans:Callable)->None:
+    def add_roll_trans(
+        self, 
+        label:str, 
+        trans:Callable
+        )->None:
         """Method to add a new transformation which is applied to metrics on 
         a rolling basis. Note all transformations should be logged BEFORE
         values are tracked.
@@ -77,7 +81,10 @@ class MetricOrchestrator:
         """
         self.metrics:Dict[str,Metric] = {}
         
-    def setup_orchestrator(self, name_trans_dict:Dict[str, Callable]) -> None:
+    def setup_orchestrator(
+        self, 
+        name_trans_dict:Dict[str, Dict[str,Callable]]
+        ) -> None:
         """Method for specifying what metrics to be tracked along with 
         associated meta data
 
@@ -85,15 +92,19 @@ class MetricOrchestrator:
             name_trans_dict (Dict[str, Callable]): A dictionary of the form 
             {*metric_name*: {*transformation_name*: *transformation_callable*}}
         """
-        metrics = {}
         for metric in name_trans_dict:
-            metrics[metric] = Metric(metric)
-            if len(name_trans_dict[metric]) > 0:
-                for trans in name_trans_dict[metric]:
-                    metrics[metric].add_roll_trans(
-                        trans, name_trans_dict[metric][trans])
-        self.metrics = metrics
-        
+            self.add_metric(
+                nm=metric,
+                rll_trans=name_trans_dict[metric]
+                )
+    
+    def add_metric(self, nm, rll_trans) -> None:
+        self.metrics[nm] = Metric(nm)
+        if len(rll_trans) > 0:
+            for trans in rll_trans:
+                self.metrics[nm].add_roll_trans(
+                    trans, rll_trans[trans])
+    
     def update_metrics(self, metric_value_dict:Dict[str, Dict[str, Any]])->None:
         """Method for updating multiple metrics simulaneously
 
@@ -120,7 +131,7 @@ class MetricOrchestrator:
         return pd.concat(all_metric_df_lst)
     
     def reset_orchestrator(self):
-        self.metrics = None
+        self.metrics = {}
 
 # Transormations
 def mean_trans(input_list: List):
