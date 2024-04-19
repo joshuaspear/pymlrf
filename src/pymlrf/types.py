@@ -1,4 +1,4 @@
-from typing import Protocol, List, Literal, Any
+from typing import Protocol, Tuple, Literal, Any
 import torch
 from torch.utils.data import DataLoader
 import logging
@@ -16,7 +16,7 @@ class TrainSingleEpochProtocol(Protocol):
         optimizer:torch.optim.Optimizer,
         criterion:torch.nn.modules.loss, 
         logger:logging.Logger
-        ) -> List[torch.Tensor,torch.Tensor]:
+        ) -> Tuple[torch.Tensor,torch.Tensor]:
         ...
 
 
@@ -28,7 +28,7 @@ class ValidateSingleEpochProtocol(Protocol):
         data_loader:DataLoader,
         gpu:Literal[True, False], 
         criterion:torch.nn.Module
-        ) -> List[torch.Tensor,torch.Tensor]:
+        ) -> Tuple[torch.Tensor,torch.Tensor]:
         ...
 
 
