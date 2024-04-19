@@ -2,13 +2,19 @@ import logging
 import numpy as np
 import os
 import pickle
-from typing import Callable, Literal, Union
+from typing import Callable, Literal, Union, Optional
 from torch.autograd import Variable
 import torch
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 torch.autograd.set_detect_anomaly(True)
 
+from ...types import (
+    TrainSingleEpochProtocol, 
+    ValidateSingleEpochProtocol,
+    GenericDataLoaderProtocol,
+    CriterionProtocol
+    )
 from .Metric import MetricOrchestrator
 from .EarlyStopper import (
     EarlyStopper, EarlyStopperPassThru, EarlyStoppingException
@@ -23,10 +29,10 @@ __all__ = [
 
 def train_single_epoch(
     model:torch.nn.Module, 
-    data_loader:DataLoader, 
+    data_loader:GenericDataLoaderProtocol, 
     gpu:bool, 
     optimizer:torch.optim.Optimizer,
-    criterion:torch.nn.modules.loss, 
+    criterion:CriterionProtocol, 
     logger:logging.Logger
     ):
     
@@ -76,9 +82,9 @@ def train_single_epoch(
             
 def validate_single_epoch(
     model:torch.nn.Module, 
-    data_loader:DataLoader,
+    data_loader:GenericDataLoaderProtocol,
     gpu:Literal[True, False], 
-    criterion:torch.nn.modules.loss
+    criterion:CriterionProtocol
     ):
     
     model.eval()
@@ -121,17 +127,18 @@ def train(
     val_data_loader:DataLoader, 
     gpu:bool, 
     optimizer:torch.optim.Optimizer,
-    criterion:torch.nn.modules.loss, 
+    criterion:CriterionProtocol, 
     epochs:int, 
     logger:logging.Logger, 
     save_dir:str, 
     scheduler:torch.optim.lr_scheduler.LRScheduler=None, 
     early_stopping_func:Union[Callable, None]=None, 
     es_action:Literal["stop", "capture"]="capture", 
-    train_epoch_func:Callable=train_single_epoch, 
-    val_epoch_func:Callable=validate_single_epoch,
+    train_epoch_func:TrainSingleEpochProtocol = train_single_epoch, 
+    val_epoch_func:ValidateSingleEpochProtocol = validate_single_epoch,
     seed: int = None,
-    mo: MetricOrchestrator = MetricOrchestrator()
+    mo: MetricOrchestrator = MetricOrchestrator(),
+    val_criterion:Optional[CriterionProtocol] = None
     ) -> MetricOrchestrator:
     
     if seed is not None:
@@ -161,7 +168,11 @@ def train(
     # Add model to cuda device
     if gpu:
         model.cuda()
+
+    if val_criterion is None:
+        val_criterion = criterion
         
+    
     for epoch in np.arange(1,epochs+1):
         try:
             logger.info("Running training epoch")
@@ -174,7 +185,7 @@ def train(
                     epoch, epoch_train_loss))
             val_loss_val, val_preds = val_epoch_func(
                 model=model, data_loader=val_data_loader, gpu=gpu, 
-                criterion=criterion)
+                criterion=val_criterion)
             
             logger.info("Running validation")
             epoch_val_loss = np.mean(val_loss_val)
