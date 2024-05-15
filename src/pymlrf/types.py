@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import DataLoader
 import logging
 
-from .SupervisedLearning.torch.Dataset import DatasetOutput
+from .Structs.torch.Dataset import DatasetOutput
 
 
 class TrainSingleEpochProtocol(Protocol):
