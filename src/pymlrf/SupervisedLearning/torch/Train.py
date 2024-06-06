@@ -17,7 +17,7 @@ from ...types import (
     )
 from .Metric import MetricOrchestrator
 from .EarlyStopper import (
-    EarlyStopper, EarlyStopperPassThru, EarlyStoppingException
+    EarlyStopper, EarlyStoppingException, PassThruStoppingCriteria
     )
 from ...utils import set_seed
 
@@ -162,7 +162,10 @@ def train(
     if early_stopping_func:
         es = EarlyStopper(stopping_func=early_stopping_func, action=es_action)
     else:
-        es = EarlyStopperPassThru()
+        es = EarlyStopper(
+            stopping_func=PassThruStoppingCriteria,
+            action=es_action
+            )
     
     logger.info("Running epochs: {}".format(epochs))
     # Add model to cuda device
@@ -224,13 +227,10 @@ def train(
             
         except EarlyStoppingException:
             logger.info(
-                "Early stopping criteria reached. Terminating training run")
-        logger.warn("Implement final epoch properly")
+                "Early stopping criteria reached. Terminating training run"
+                )
         if early_stopping_func:
-            if es.optimal_epoch == 0:
-                fnl_epoch = epochs-1
-            else:
-                fnl_epoch = es.optimal_epoch
+            fnl_epoch = es.optimal_epoch
         else:
             fnl_epoch = es.get_min_epoch()
     return mo, fnl_epoch
