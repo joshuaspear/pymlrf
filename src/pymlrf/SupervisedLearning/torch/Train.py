@@ -41,6 +41,7 @@ def train_single_epoch(
     preds = []
     range_gen = tqdm(
         enumerate(data_loader),
+        total=len(data_loader)
         #desc=f"Epoch {int(epoch)}/{epochs}",
         )
     for i, vals in range_gen:
@@ -163,7 +164,7 @@ def train(
         es = EarlyStopper(stopping_func=early_stopping_func, action=es_action)
     else:
         es = EarlyStopper(
-            stopping_func=PassThruStoppingCriteria,
+            stopping_func=PassThruStoppingCriteria(),
             action=es_action
             )
     
