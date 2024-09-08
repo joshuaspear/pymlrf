@@ -1,6 +1,7 @@
 import os
 import logging
 from typing import Any, Callable, Dict, Optional
+import shutil 
 
 from ..FileSystem.DirectoryHandler import DirectoryHandler
 from .Tracker import Tracker
@@ -54,6 +55,22 @@ class Experiment(DirectoryHandler):
             
         if self.is_created:
             super().delete()
+    
+    def rename(self, new_exp_name:str)->"Experiment":
+        if self.in_tracker:
+            self._mt.rename_model(
+                u_id=self._exp_name,
+                new_u_id=new_exp_name
+                )
+        loc_split = self.loc.split(os.sep)
+        parent_dir = os.path.join(*loc_split[:-1])
+        new_loc = os.path.join("/",parent_dir, new_exp_name)
+        if self.is_created:
+            for f in os.listdir(self.loc):
+                shutil.move(os.path.join(self.loc, f), new_loc)
+            super().delete()
+        self._exp_name = new_exp_name
+        self.loc = new_loc
             
                     
     def run(

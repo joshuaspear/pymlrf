@@ -143,6 +143,14 @@ class Tracker:
         dupe_indices.sort(reverse=True)
         for idx in dupe_indices:
             del self.rows[idx]
+            
+    def rename_model(self, u_id:str, new_u_id:str):
+        curr_model_nms = [rw[self.u_id] for rw in self.rows]
+        dupe_indices = [idx for idx, mdl_nm in enumerate(curr_model_nms) 
+                        if mdl_nm == u_id]
+        dupe_indices.sort(reverse=True)
+        for idx in dupe_indices:
+            self.rows[idx][self.u_id] = new_u_id
         
     def import_existing_pandas_df_tracker(
         self, exstng_track_df:pd.DataFrame, **kwargs

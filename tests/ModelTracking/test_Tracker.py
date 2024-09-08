@@ -63,7 +63,7 @@ class TrackerTest(unittest.TestCase):
         upt_row = tracker.rows[tracker.get_cur_row_index(u_id=1)]
         assert upt_row["model_name"] == 1
         assert upt_row["first_col"] == 10
-        assert upt_row["first_col"] == 20
+        assert upt_row["second_col"] == 20
         assert len(tracker.rows) == 3
         
         new_row = {"model_name":4,"first_col":10,"second_col":20}
@@ -71,9 +71,27 @@ class TrackerTest(unittest.TestCase):
         upt_row = tracker.rows[tracker.get_cur_row_index(u_id=4)]
         assert upt_row["model_name"] == 4
         assert upt_row["first_col"] == 10
-        assert upt_row["first_col"] == 20
+        assert upt_row["second_col"] == 20
         assert len(tracker.rows) == 4
         
+    def test_rename_model(self):
+        tracker = Tracker(u_id="model_name")
+        tracker.rows = [
+            {"model_name":2,"first_col":1,"second_col":2},
+            {"model_name":1,"first_col":3,"second_col":4},
+            {"model_name":3,"first_col":1,"second_col":2}
+            ]
+        tracker.column_names = ["model_name","first_col","second_col"]
+        tracker.rename_model(
+            u_id=1, new_u_id=100
+        )
+        assert tracker.check_model_exists(u_id=100)
+        assert not tracker.check_model_exists(u_id=1)
+        upt_row = tracker.rows[tracker.get_cur_row_index(u_id=100)]
+        assert upt_row["model_name"] == 100
+        assert upt_row["first_col"] == 3
+        assert upt_row["second_col"] == 4
+        assert len(tracker.rows) == 3
     
     
 
