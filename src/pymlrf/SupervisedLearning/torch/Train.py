@@ -241,7 +241,7 @@ def train(
                             save_dir, 
                             f"epoch_{epoch}_train_preds.csv"
                             ), 
-                        train_preds.values, 
+                        train_preds.detach().numpy(), 
                         delimiter=","
                         )
                     np.savetxt(
@@ -249,7 +249,7 @@ def train(
                             save_dir, 
                             f"epoch_{epoch}_val_preds.csv"
                             ), 
-                        val_preds.values, 
+                        val_preds.detach().numpy(), 
                         delimiter=","
                         )
                 else:
