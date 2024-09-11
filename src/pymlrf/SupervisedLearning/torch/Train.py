@@ -139,7 +139,8 @@ def train(
     val_epoch_func:ValidateSingleEpochProtocol = validate_single_epoch,
     seed: int = None,
     mo: MetricOrchestrator = MetricOrchestrator(),
-    val_criterion:Optional[CriterionProtocol] = None
+    val_criterion:Optional[CriterionProtocol] = None,
+    preds_save_type:Optional[Literal["pickle","csv"]] = None
     ) -> MetricOrchestrator:
     
     if seed is not None:
@@ -216,13 +217,45 @@ def train(
                     'loss': epoch_train_loss,
                 }, chkp_pth)
             
-            with open(os.path.join(save_dir, "epoch_{}_train_preds.pkl".format(
-                epoch)), "wb") as file:
-                pickle.dump(train_preds, file)
-                
-            with open(os.path.join(save_dir, "epoch_{}_val_preds.pkl".format(
-                epoch)), "wb") as file:
-                pickle.dump(val_preds, file)
+            if preds_save_type is not None:
+                if preds_save_type == "pickle":
+                    with open(
+                        os.path.join(
+                            save_dir, 
+                            f"epoch_{epoch}_train_preds.pkl"
+                            ), "wb"
+                        ) as file:
+                        pickle.dump(train_preds, file)
+                        
+                    with open(
+                        os.path.join(
+                            save_dir, 
+                            f"epoch_{epoch}_val_preds.pkl"
+                            ), "wb"
+                        ) as file:
+                        pickle.dump(val_preds, file)
+                        
+                elif preds_save_type == "csv":
+                    np.savetxt(
+                        os.path.join(
+                            save_dir, 
+                            f"epoch_{epoch}_train_preds.csv"
+                            ), 
+                        train_preds.values, 
+                        delimiter=","
+                        )
+                    np.savetxt(
+                        os.path.join(
+                            save_dir, 
+                            f"epoch_{epoch}_val_preds.csv"
+                            ), 
+                        val_preds.values, 
+                        delimiter=","
+                        )
+                else:
+                    raise ValueError(
+                        "preds_save_type must be either None, csv or pickle"
+                        )
             
             es.assess(value=epoch_val_loss, epoch=epoch)
             
