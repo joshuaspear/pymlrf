@@ -9,7 +9,8 @@ def epochs_to_steps(
     batch_size:int,
     logging_freq:int=1
     ) -> Tuple[int]:
-    n_steps_per_epoch = int(math.ceil(n_obs/batch_size))
-    n_steps = int(math.ceil(n_steps_per_epoch*epochs))
     n_logging_epochs = epochs*logging_freq
+    n_steps_per_epoch = int(math.ceil((n_obs/batch_size)))
+    n_steps = int(math.ceil(n_steps_per_epoch*epochs))
+    n_steps_per_epoch = int(math.ceil(n_steps_per_epoch/logging_freq))
     return n_steps, n_steps_per_epoch, n_logging_epochs
