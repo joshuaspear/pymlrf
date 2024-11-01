@@ -185,15 +185,15 @@ def train(
                 model=model, data_loader=train_data_loader, gpu=gpu, 
                 optimizer=optimizer, criterion=criterion,logger=logger)
             epoch_train_loss = np.mean(train_loss_val)
-                        
+            del train_loss_val           
             logger.info("epoch {}\t training loss : {}".format(
                     epoch, epoch_train_loss))
             val_loss_val, val_preds = val_epoch_func(
                 model=model, data_loader=val_data_loader, gpu=gpu, 
                 criterion=val_criterion)
-            
             logger.info("Running validation")
             epoch_val_loss = np.mean(val_loss_val)
+            del val_loss_val
             logger.info("epoch {}\t validation loss : {} ".format(
                     epoch, epoch_val_loss))
             
