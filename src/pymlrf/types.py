@@ -2,6 +2,7 @@ from typing import Protocol, Tuple, Literal, Any, runtime_checkable
 import torch
 from torch.utils.data import DataLoader
 import logging
+from typing import Dict
 
 from .Structs.torch.Dataset import DatasetOutput
 
@@ -16,7 +17,7 @@ class TrainSingleEpochProtocol(Protocol):
         optimizer:torch.optim.Optimizer,
         criterion:torch.nn.modules.loss, 
         logger:logging.Logger
-        ) -> Tuple[torch.Tensor,torch.Tensor]:
+        ) -> Tuple[torch.Tensor,Dict[str,torch.Tensor]]:
         ...
 
 @runtime_checkable
@@ -28,7 +29,7 @@ class ValidateSingleEpochProtocol(Protocol):
         data_loader:DataLoader,
         gpu:Literal[True, False], 
         criterion:torch.nn.Module
-        ) -> Tuple[torch.Tensor,torch.Tensor]:
+        ) -> Tuple[torch.Tensor,Dict[str,torch.Tensor]]:
         ...
 
 @runtime_checkable

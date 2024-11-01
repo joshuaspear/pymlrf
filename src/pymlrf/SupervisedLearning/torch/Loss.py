@@ -42,7 +42,7 @@ class BalancedLoss:
             those provided in the multi_loss parameter
         """
         loss = 0
-        for key in act:
+        for key in self.loss_lkp.keys():
             loss += self.loss_lkp[key](pred[key], act[key])
         out_loss = torch.mean(loss)
         return out_loss

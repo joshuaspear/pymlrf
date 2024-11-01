@@ -219,39 +219,42 @@ def train(
             
             if preds_save_type is not None:
                 if preds_save_type == "pickle":
-                    with open(
-                        os.path.join(
-                            save_dir, 
-                            f"epoch_{epoch}_train_preds.pkl"
-                            ), "wb"
-                        ) as file:
-                        pickle.dump(train_preds, file)
-                        
-                    with open(
-                        os.path.join(
-                            save_dir, 
-                            f"epoch_{epoch}_val_preds.pkl"
-                            ), "wb"
-                        ) as file:
-                        pickle.dump(val_preds, file)
+                    for k in train_preds.keys():
+                        with open(
+                            os.path.join(
+                                save_dir, 
+                                f"epoch_{epoch}_train_preds_{k}.pkl"
+                                ), "wb"
+                            ) as file:
+                            pickle.dump(train_preds[k], file)
+                    for k in val_preds.keys():
+                        with open(
+                            os.path.join(
+                                save_dir, 
+                                f"epoch_{epoch}_val_preds_{k}.pkl"
+                                ), "wb"
+                            ) as file:
+                            pickle.dump(val_preds[k], file)
                         
                 elif preds_save_type == "csv":
-                    np.savetxt(
-                        os.path.join(
-                            save_dir, 
-                            f"epoch_{epoch}_train_preds.csv"
-                            ), 
-                        train_preds.detach().cpu().numpy().astype(float), 
-                        delimiter=","
-                        )
-                    np.savetxt(
-                        os.path.join(
-                            save_dir, 
-                            f"epoch_{epoch}_val_preds.csv"
-                            ), 
-                        val_preds.detach().cpu().numpy().astype(float), 
-                        delimiter=","
-                        )
+                    for k in train_preds.keys():
+                        np.savetxt(
+                            os.path.join(
+                                save_dir, 
+                                f"epoch_{epoch}_train_preds_{k}.csv"
+                                ), 
+                            train_preds[k].detach().cpu().float().numpy(), 
+                            delimiter=","
+                            )
+                    for k in val_preds.keys():
+                        np.savetxt(
+                            os.path.join(
+                                save_dir, 
+                                f"epoch_{epoch}_val_preds_{k}.csv"
+                                ), 
+                            val_preds[k].detach().cpu().float().numpy(), 
+                            delimiter=","
+                            )
                 else:
                     raise ValueError(
                         "preds_save_type must be either None, csv or pickle"
