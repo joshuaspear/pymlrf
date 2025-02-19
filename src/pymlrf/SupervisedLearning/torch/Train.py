@@ -140,7 +140,9 @@ def train(
     seed: int = None,
     mo: MetricOrchestrator = MetricOrchestrator(),
     val_criterion:Optional[CriterionProtocol] = None,
-    preds_save_type:Optional[Literal["pickle","csv"]] = None
+    preds_save_type:Optional[Literal["pickle","csv"]] = None,
+    train_epoch_callback:Optional[Callable]=None,
+    val_epoch_callback:Optional[Callable]=None
     ) -> MetricOrchestrator:
     
     if seed is not None:
@@ -185,12 +187,16 @@ def train(
                 model=model, data_loader=train_data_loader, gpu=gpu, 
                 optimizer=optimizer, criterion=criterion,logger=logger)
             epoch_train_loss = np.mean(train_loss_val)
+            if train_epoch_callback is not None:
+                train_epoch_callback()
             del train_loss_val           
             logger.info("epoch {}\t training loss : {}".format(
                     epoch, epoch_train_loss))
             val_loss_val, val_preds = val_epoch_func(
                 model=model, data_loader=val_data_loader, gpu=gpu, 
                 criterion=val_criterion)
+            if val_epoch_callback is not None:
+                val_epoch_callback()
             logger.info("Running validation")
             epoch_val_loss = np.mean(val_loss_val)
             del val_loss_val
