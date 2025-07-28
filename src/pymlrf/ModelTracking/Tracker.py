@@ -1,36 +1,43 @@
+from abc import ABCMeta, abstractmethod
 import logging
 import os
 from typing import Any, Callable, Dict, List
 import time
 import pandas as pd
+import sqlite3
 
 from ..FileSystem import FileHandler
 
 logger = logging.getLogger("pymlrf")
 
 __all__ = [
+    "TrackerBase",
     "Tracker",
-    "SerialisedTracker"
+    "SerialisedTracker",
+    "DBTracker"
 ]
 
-
-class Tracker:
+class TrackerBase(metaclass=ABCMeta):
     
     _error_value:str = "RUN_ERROR"
     
     def __init__(self, u_id:str="model_name"):
-        """Class representing a 'model tracker'. 
-        self.rows is a list dictionaries where each dictionary is of the form 
-        {column_name: value} and each dictionary represents an individual 
-        experiment
-        self.column_names is a list of unique column_name value from self.rows
-        """
-        self.rows:List[Dict[str,Any]] = []
         self.column_names:List[str] = []
         self.u_id:str = u_id
-        
-    def _get_check_consistent_col_names(self, new_row_col_names:list, 
-                                        force_columns:bool=False) -> set:
+    
+    
+    def write_run_error(self, u_id:str, overwrite:bool=True):
+        if self.check_model_exists(u_id=u_id):
+            if overwrite:
+                row_dict = {col:self._error_value for col in self.column_names}
+                row_dict[self.u_id] = u_id
+                self.update_tracker_w_dict(row_dict=row_dict)
+    
+    def get_check_consistent_col_names(
+        self, 
+        new_row_col_names:list, 
+        force_columns:bool=False
+        ) -> set:
         """Method is used check whether the column names provided in 
         new_row_col_names are consistent with the current names housed in 
         self.column_names. The method raises an exception if the new column 
@@ -63,12 +70,72 @@ class Tracker:
                 assert(len(nw_col_names) == 0), nw_col_names_wrn
         return nw_col_names
     
-    def write_run_error(self, u_id:str, overwrite:bool=True):
-        if self.check_model_exists(u_id=u_id):
-            if overwrite:
-                row_dict = {col:self._error_value for col in self.column_names}
-                row_dict[self.u_id] = u_id
-                self.update_tracker_w_dict(row_dict=row_dict)
+    @abstractmethod
+    def write_run_error(
+        self, 
+        u_id:str,
+        overwrite:bool=True
+        ):
+        pass
+    
+    @abstractmethod    
+    def write_u_id(
+        self, 
+        u_id_update:Any
+        ):
+        """Writes a column to each row named self.u_id according to the function
+        provided in u_id_update. Useful when a tracker has previously been 
+        defined with a different u_id to the one required.
+
+        Args:
+            u_id_update (Callable): Function which takes in a individual values
+            of self.row i.e. a Dict[str,Any]. Should return an Any.
+        """
+        pass
+    
+    @abstractmethod
+    def update_tracker_w_dict(
+        self, 
+        row_dict:dict, 
+        force_columns:bool=False
+        ):
+        pass
+    
+    @abstractmethod
+    def check_model_exists(self, u_id:str):
+        pass
+    
+    @abstractmethod
+    def get_cur_row_index(self, u_id:str):
+        pass
+
+    @abstractmethod
+    def drop_model(
+        self, 
+        u_id:str
+        ):
+        pass
+    
+    @abstractmethod
+    def rename_model(
+        self, 
+        u_id:str, 
+        new_u_id:str
+        ):
+        pass
+    
+
+class Tracker(TrackerBase):
+    
+    def __init__(self, u_id:str="model_name"):
+        """Class representing a 'model tracker'. 
+        self.rows is a list dictionaries where each dictionary is of the form 
+        {column_name: value} and each dictionary represents an individual 
+        experiment
+        self.column_names is a list of unique column_name value from self.rows
+        """
+        TrackerBase.__init__(self,u_id=u_id)
+        self.rows:List[Dict[str,Any]] = []
                 
     def write_u_id(self, u_id_update:Callable):
         """Writes a column to each row named self.u_id according to the function
@@ -109,7 +176,7 @@ class Tracker:
         except KeyError as e:
             pass     
         new_row_col_names = [col for col in row_dict.keys()]
-        nw_col_names = self._get_check_consistent_col_names(
+        nw_col_names = self.get_check_consistent_col_names(
             new_row_col_names=new_row_col_names, force_columns=force_columns)
         if len(nw_col_names) > 0:
             self.column_names += nw_col_names
@@ -219,3 +286,154 @@ class SerialisedTracker(Tracker, FileHandler):
         """
         exstng_track_df = pd.read_json(self.path, **rd_json_kwargs)
         self.import_existing_pandas_df_tracker(exstng_track_df, **imprt_kwargs)
+        
+
+class DBTracker(TrackerBase, FileHandler):
+    
+    def __init__(
+        self, 
+        path:str, 
+        u_id:str="model_name"
+        ):
+        FileHandler.__init__(self, path=path)
+        Tracker.__init__(self, u_id=u_id)
+        assert path.split(".")[-1] == "db", f"save file must be a db"
+        self.__valid = False
+        self.__con = sqlite3.connect(self.path)
+    
+    def read(self):
+        cur = self.__con.cursor()
+        res = cur.execute("PRAGMA table_info('tracker')")
+        out_names = ["cid", "name", "type", "notnull", "dflt_value", "pk"]
+        output = [
+            {_k:_v for _k,_v in zip(out_names, _rw)} 
+            for _rw in res.fetchall()
+        ]
+        self.column_names = [_rw["name"] for _rw in output]
+        self.__valid = True
+
+    def status_check(self):
+        if self.is_created:
+            self.__valid = len(self.column_names)>0
+        else:
+            self.__valid = True
+    
+    def get_current_experiments(self)->List[str]:
+        self.status_check()
+        assert self.__valid, f"Run .read() first!"
+        cur = self.__con.cursor()
+        res = cur.execute(f"SELECT {self.u_id} FROM tracker")
+        return [i[0] for i in res.fetchall()]
+        
+    def check_model_exists(self, u_id:str):
+        return u_id in self.get_current_experiments()
+        
+                    
+    def write_u_id(self, u_id_update:str):
+        """Writes a column to each row named self.u_id according to the function
+        provided in u_id_update. Useful when a tracker has previously been 
+        defined with a different u_id to the one required.
+
+        Args:
+            u_id_update (Callable): Function which takes in a individual values
+            of self.row i.e. a Dict[str,Any]. Should return an Any.
+        """
+        self.status_check()
+        cur = self.__con.cursor()
+        cur.execute(f"""
+            ALTER TABLE tracker
+            ADD {u_id_update};
+        """)
+        self.__con.commit()
+
+    def update_tracker_w_dict(self, row_dict:dict, force_columns:bool=False):
+        """Updates the self.rows and self.column_names with the new values 
+        provided in row_dict
+
+        Args:
+            row_dict (dict): dictionary containing {column:values} to be added 
+            to the tracker
+            force_columns (bool, optional): Option to force new column names in 
+            and avoid exception. Defaults to False.
+        """
+        self.status_check()
+        cur = self.__con.cursor()
+        new_row_col_names = [col for col in row_dict.keys()]
+        nw_col_names = self.get_check_consistent_col_names(
+            new_row_col_names=new_row_col_names, force_columns=force_columns)
+        if len(nw_col_names) > 0:
+            self.column_names += nw_col_names
+            for _col in nw_col_names:
+                cur.execute(f"""
+                    ALTER TABLE tracker
+                    ADD {_col};
+                """)
+                self.__con.commit()
+        if self.check_model_exists(u_id=row_dict[self.u_id]):
+            logger.warning(
+                "Model already exists in tracker, overwriting relevant values")
+            logger.debug(f"Inserting row with u_id: {row_dict[self.u_id]}")
+            sql_row_fmt = []
+            for _k in row_dict.keys():
+                if _k != self.u_id:
+                    value = self.__format_sql_value(row_dict[_k])
+                    sql_row_fmt.append(
+                        f"{_k} = {value}"
+                    )
+            cur.execute(f"""
+                UPDATE tracker 
+                SET {", ".join(sql_row_fmt)}
+                WHERE {self.u_id} = '{row_dict[self.u_id]}';
+            """)
+            self.__con.commit()
+        else:
+            _col_nms_to_set = []
+            _vals_to_set = []
+            for _k in row_dict.keys():
+                _col_nms_to_set.append(_k)
+                _vals_to_set.append(self.__format_sql_value(row_dict[_k]))
+            for _col in self.column_names:
+                if _col not in _col_nms_to_set:
+                    _col_nms_to_set.append(_col)
+                    _vals_to_set.append("NULL")
+            cur.execute(f"""
+                INSERT INTO tracker {', '.join(_col_nms_to_set)}
+                VALUES {', '.join(_vals_to_set)};
+            """)
+            self.__con.commit()
+        
+    
+    def __format_sql_value(self, value:Any)->str:
+        if isinstance(value, bool):
+            if value:
+                value = "TRUE"
+            else:
+                value = "FALSE"
+        elif isinstance(value, str):
+            value = f"'{value}'"
+        elif isinstance(value, int):
+            value = f"{float(value)}"
+        elif isinstance(value, float):
+            value = f"{value}"
+        else:
+            raise ValueError
+        return value
+        
+    
+    def drop_model(
+        self, 
+        u_id:str
+        ):
+        cur = self.__con.cursor()
+        cur.execute(f"""
+                DELETE FROM tracker WHERE {self.u_id} = '{u_id}';
+            """)
+        self.__con.commit()
+    
+    def rename_model(
+        self, 
+        u_id:str, 
+        new_u_id:str
+        ):
+        raise NotImplementedError
+    
