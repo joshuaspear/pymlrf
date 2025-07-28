@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
+import os
 
 __all__ = [
     "Metric", 
@@ -12,7 +13,7 @@ __all__ = [
 # Metric class 
 class Metric:
     
-    def __init__(self, name:str) -> None:
+    def __init__(self, name:str, save_dir:Optional[str]=None) -> None:
         """Class for tracking the value of metric throughout training. The raw
         values of the metric are stored in self.value_dict, the transformations
         that should be applied to the metric on a rolling basis are stored in 
@@ -26,6 +27,14 @@ class Metric:
         self.value_dict = {}
         self.roll_trans = {}
         self.roll_trans_values = {}
+        self.save_path = os.path.join(
+            save_dir, f"{name}.csv"
+        )
+        if self.save_path is not None:
+            with open(self.save_path, "w") as f:
+                f.write(f"step,{name}")
+                f.write("\n")
+            
         
     def add_value(self, label:str, value:Any)->None:
         """Method to log a new value with the tracker. Any rolling 
@@ -36,6 +45,10 @@ class Metric:
             value (Any): The specific value of the metric for this update
         """
         self.value_dict[label] = value
+        if self.save_path is not None:
+            with open(self.save_path, "a") as f:
+                f.write(f"{label},{value}")
+                f.write("\n")
         for trans_lab in self.roll_trans:
             self.roll_trans_values[trans_lab][label] = self.roll_trans[
                 trans_lab](list(self.value_dict.values()))
@@ -76,10 +89,11 @@ class Metric:
 
 class MetricOrchestrator:
     
-    def __init__(self) -> None:
+    def __init__(self, save_dir:Optional[str]=None) -> None:
         """Class for handling the update of multiple metrics simultaneously
         """
         self.metrics:Dict[str,Metric] = {}
+        self.save_dir = save_dir
         
     def setup_orchestrator(
         self, 
@@ -99,7 +113,7 @@ class MetricOrchestrator:
                 )
     
     def add_metric(self, nm, rll_trans) -> None:
-        self.metrics[nm] = Metric(nm)
+        self.metrics[nm] = Metric(nm, save_dir=self.save_dir)
         if len(rll_trans) > 0:
             for trans in rll_trans:
                 self.metrics[nm].add_roll_trans(

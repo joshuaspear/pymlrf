@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import torch
-from typing import Dict
+from typing import Dict, Optional, List
 
 __all__ = [
     "DatasetOutput"
@@ -17,4 +17,5 @@ class DatasetOutput:
     """
     input:Dict[str,torch.Tensor]
     output:Dict[str,torch.Tensor]
+    id:Optional[List[str]] = None
         

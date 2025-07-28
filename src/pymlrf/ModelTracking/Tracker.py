@@ -1,7 +1,7 @@
 import logging
 import os
 from typing import Any, Callable, Dict, List
-
+import time
 import pandas as pd
 
 from ..FileSystem import FileHandler
@@ -99,7 +99,7 @@ class Tracker:
         """
         try:
             row_idx = self.get_cur_row_index(u_id=row_dict[self.u_id])
-            logger.warn(
+            logger.warning(
                 "Model already exists in tracker, overwriting relevant values")
             logger.debug(f"Inserting row with u_id: {row_dict}")
             old_row = self.rows.pop(row_idx)
@@ -171,9 +171,10 @@ class Tracker:
 
 class SerialisedTracker(Tracker, FileHandler):
     
-    def __init__(self, path:str, u_id:str="model_name"):
+    def __init__(self, path:str, u_id:str="model_name", safe_write:bool=True):
         FileHandler.__init__(self, path=path)
         Tracker.__init__(self, u_id=u_id)
+        self.safe_write = safe_write
     
     def write(self, **kwargs):
         """Saves the tracker i.e. values in self.rows as a json. This is 
@@ -184,7 +185,22 @@ class SerialisedTracker(Tracker, FileHandler):
             json_dir (str): File location of where to save the output json
         """
         dict_df = self.tracker_to_pandas_df()
+        tracker_exists = os.path.exists(self.path)
+        run_safe_write = tracker_exists and self.safe_write
+        if run_safe_write:
+            path_split = self.path.split(".")
+            backup_root = ".".join(path_split[:-1])
+            extention = path_split[-1]
+            backup_file_pth = f"{backup_root}_TEMP.{extention}"
+            os.rename(self.path, backup_file_pth)
         dict_df.to_json(self.path, **kwargs)
+        if run_safe_write:
+            path_exists = os.path.exists(self.path)
+            while not path_exists:
+                logger.info("Tracker not fully written waiting before cleanup")
+                time.sleep(1)
+                path_exists = os.path.exists(self.path)
+            os.remove(backup_file_pth)
 
     def read(
         self, 

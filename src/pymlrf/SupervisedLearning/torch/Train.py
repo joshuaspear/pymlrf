@@ -2,7 +2,7 @@ import logging
 import numpy as np
 import os
 import pickle
-from typing import Callable, Literal, Union, Optional
+from typing import Callable, Literal, Union, Optional, Tuple
 from torch.autograd import Variable
 import torch
 from torch.utils.data import DataLoader
@@ -33,12 +33,14 @@ def train_single_epoch(
     gpu:bool, 
     optimizer:torch.optim.Optimizer,
     criterion:CriterionProtocol, 
-    logger:logging.Logger
+    logger:logging.Logger,
+    step_callback:Optional[Callable]=None
     ):
     
     model.train()
     losses = []
-    preds = []
+    preds = {}
+    idxs = []
     range_gen = tqdm(
         enumerate(data_loader),
         total=len(data_loader)
@@ -60,14 +62,22 @@ def train_single_epoch(
             output_vals = {val:Variable(output_vals[val]) 
                            for val in output_vals}
         
+        if step_callback is not None:
+            step_callback(vals)
+        
         optimizer.zero_grad()
 
         # Compute output
         output = model(**input_vals)
-        preds.append(output)
+        for _k in output.keys():
+            try:
+                preds[_k].append(output[_k])
+            except KeyError as e:
+                preds[_k] = [output[_k]]
         train_loss = criterion(output, output_vals)
         losses.append(train_loss.item())
-
+        if vals.id is not None:
+                idxs = [*idxs, *vals.id]
         # losses.update(train_loss.data[0], g.size(0))
         # error_ratio.update(evaluation(output, target).data[0], g.size(0))
 
@@ -79,18 +89,25 @@ def train_single_epoch(
         except RuntimeError as e:
             logger.debug("Runtime error on training instance: {}".format(i))
             raise e
-    return losses, preds
+    assert all([isinstance(_i,str) for _i in idxs])
+    return (
+        losses, 
+        {_k:torch.concat(preds[_k], dim=0) for _k in preds.keys()},
+        idxs
+        )
             
 def validate_single_epoch(
     model:torch.nn.Module, 
     data_loader:GenericDataLoaderProtocol,
     gpu:Literal[True, False], 
-    criterion:CriterionProtocol
+    criterion:CriterionProtocol,
+    step_callback:Optional[Callable]=None
     ):
     
     model.eval()
     losses = []
-    preds = []
+    preds = {}
+    idxs = []
     with torch.no_grad():
         for i, vals in enumerate(data_loader):
 
@@ -111,14 +128,28 @@ def validate_single_epoch(
                 output_vals = {
                     val:Variable(output_vals[val]) for val in output_vals
                     }
+            
+            if step_callback is not None:
+                step_callback(vals)
 
             # Compute output
             output = model(**input_vals)
 
             # Logs
             losses.append(criterion(output, output_vals).item())
-            preds.append(output)
-    return losses, preds
+            for _k in output.keys():
+                try:
+                    preds[_k].append(output[_k])
+                except KeyError as e:
+                    preds[_k] = [output[_k]]
+            if vals.id is not None:
+                idxs = [*idxs, *vals.id]
+    assert all([isinstance(_i,str) for _i in idxs])
+    return (
+        losses, 
+        {_k:torch.concat(preds[_k], dim=0) for _k in preds.keys()},
+        idxs
+    )
 
 
 
@@ -142,8 +173,10 @@ def train(
     val_criterion:Optional[CriterionProtocol] = None,
     preds_save_type:Optional[Literal["pickle","csv"]] = None,
     train_epoch_callback:Optional[Callable]=None,
-    val_epoch_callback:Optional[Callable]=None
-    ) -> MetricOrchestrator:
+    val_epoch_callback:Optional[Callable]=None,
+    train_step_callback:Optional[Callable]=None,
+    val_step_callback:Optional[Callable]=None
+    ) -> Tuple[MetricOrchestrator, int]:
     
     if seed is not None:
         set_seed(n=seed)
@@ -183,22 +216,25 @@ def train(
     for epoch in np.arange(1,epochs+1):
         try:
             logger.info("Running training epoch")
-            train_loss_val, train_preds =  train_epoch_func(
+            train_loss_val, train_preds, train_idxs =  train_epoch_func(
                 model=model, data_loader=train_data_loader, gpu=gpu, 
-                optimizer=optimizer, criterion=criterion,logger=logger)
-            epoch_train_loss = np.mean(train_loss_val)
+                optimizer=optimizer, criterion=criterion,logger=logger,
+                step_callback=train_step_callback
+                )
+            epoch_train_loss = np.mean(train_loss_val).item()
             if train_epoch_callback is not None:
                 train_epoch_callback()
             del train_loss_val           
             logger.info("epoch {}\t training loss : {}".format(
                     epoch, epoch_train_loss))
-            val_loss_val, val_preds = val_epoch_func(
+            val_loss_val, val_preds, val_idxs = val_epoch_func(
                 model=model, data_loader=val_data_loader, gpu=gpu, 
-                criterion=val_criterion)
+                criterion=val_criterion, step_callback=val_step_callback
+                )
             if val_epoch_callback is not None:
                 val_epoch_callback()
             logger.info("Running validation")
-            epoch_val_loss = np.mean(val_loss_val)
+            epoch_val_loss = np.mean(val_loss_val).item()
             del val_loss_val
             logger.info("epoch {}\t validation loss : {} ".format(
                     epoch, epoch_val_loss))
@@ -211,7 +247,13 @@ def train(
             })
             
             if scheduler:
-                scheduler.step()            
+                if isinstance(
+                    scheduler, 
+                    torch.optim.lr_scheduler.ReduceLROnPlateau
+                    ):
+                    scheduler.step(metrics=epoch_val_loss)
+                else:    
+                    scheduler.step()            
                 
             chkp_pth = os.path.join(save_dir, "mdl_chkpnt_epoch_{}.pt".format(
                 epoch))
@@ -241,6 +283,22 @@ def train(
                                 ), "wb"
                             ) as file:
                             pickle.dump(val_preds[k], file)
+                    if len(train_idxs)>0:
+                        with open(
+                            os.path.join(
+                                save_dir, 
+                                f"epoch_{epoch}_train_idxs.pkl"
+                                ), "wb"
+                            ) as file:
+                            pickle.dump(train_idxs, file)
+                    if len(val_idxs)>0:
+                        with open(
+                            os.path.join(
+                                save_dir, 
+                                f"epoch_{epoch}_val_idxs.pkl"
+                                ), "wb"
+                            ) as file:
+                            pickle.dump(val_idxs, file)
                         
                 elif preds_save_type == "csv":
                     for k in train_preds.keys():
@@ -261,6 +319,22 @@ def train(
                             val_preds[k].detach().cpu().float().numpy(), 
                             delimiter=","
                             )
+                    if len(train_idxs)>0:
+                        with open(
+                            os.path.join(
+                                save_dir, 
+                                f"epoch_{epoch}_train_idxs.pkl"
+                                ), "wb"
+                            ) as file:
+                            pickle.dump(train_idxs, file)
+                    if len(val_idxs)>0:
+                        with open(
+                            os.path.join(
+                                save_dir, 
+                                f"epoch_{epoch}_val_idxs.pkl"
+                                ), "wb"
+                            ) as file:
+                            pickle.dump(val_idxs, file)
                 else:
                     raise ValueError(
                         "preds_save_type must be either None, csv or pickle"
