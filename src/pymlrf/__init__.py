@@ -1,7 +1,10 @@
 import logging
 import os
+import sqlite3 
 
 logging_name = "pymlrf"
+
+sqlite3.threadsafety = 1
 
 class CustomFormatter(logging.Formatter):
 

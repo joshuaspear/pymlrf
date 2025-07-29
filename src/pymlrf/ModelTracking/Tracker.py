@@ -4,7 +4,16 @@ import os
 from typing import Any, Callable, Dict, List
 import time
 import pandas as pd
-import sqlite3
+import numpy as np
+try:
+    import sqlite3
+except ImportError as e:
+    pass
+from contextlib import closing
+try:
+    import psycopg2
+except ImportError as e:
+    pass
 
 from ..FileSystem import FileHandler
 
@@ -14,7 +23,8 @@ __all__ = [
     "TrackerBase",
     "Tracker",
     "SerialisedTracker",
-    "DBTracker"
+    "SQLiteTracker",
+    "PostgresTracker"
 ]
 
 class TrackerBase(metaclass=ABCMeta):
@@ -37,7 +47,7 @@ class TrackerBase(metaclass=ABCMeta):
         self, 
         new_row_col_names:list, 
         force_columns:bool=False
-        ) -> set:
+        ) -> set[str]:
         """Method is used check whether the column names provided in 
         new_row_col_names are consistent with the current names housed in 
         self.column_names. The method raises an exception if the new column 
@@ -70,14 +80,6 @@ class TrackerBase(metaclass=ABCMeta):
                 assert(len(nw_col_names) == 0), nw_col_names_wrn
         return nw_col_names
     
-    @abstractmethod
-    def write_run_error(
-        self, 
-        u_id:str,
-        overwrite:bool=True
-        ):
-        pass
-    
     @abstractmethod    
     def write_u_id(
         self, 
@@ -105,10 +107,6 @@ class TrackerBase(metaclass=ABCMeta):
     def check_model_exists(self, u_id:str):
         pass
     
-    @abstractmethod
-    def get_cur_row_index(self, u_id:str):
-        pass
-
     @abstractmethod
     def drop_model(
         self, 
@@ -286,9 +284,25 @@ class SerialisedTracker(Tracker, FileHandler):
         """
         exstng_track_df = pd.read_json(self.path, **rd_json_kwargs)
         self.import_existing_pandas_df_tracker(exstng_track_df, **imprt_kwargs)
-        
 
-class DBTracker(TrackerBase, FileHandler):
+def format_sql_value(value:Any)->str:
+    if isinstance(value, bool):
+        if value:
+            value = "TRUE"
+        else:
+            value = "FALSE"
+    elif isinstance(value, str):
+        value = f"'{value}'"
+    elif isinstance(value, int):
+        value = f"{float(value)}"
+    elif isinstance(value, float):
+        value = f"{value}"
+    else:
+        value = f"'{str(value)}'"
+        # raise ValueError(f"{value}, {type(value)}")
+    return value
+
+class SQLiteTracker(TrackerBase, FileHandler):
     
     def __init__(
         self, 
@@ -296,34 +310,94 @@ class DBTracker(TrackerBase, FileHandler):
         u_id:str="model_name"
         ):
         FileHandler.__init__(self, path=path)
-        Tracker.__init__(self, u_id=u_id)
+        TrackerBase.__init__(self, u_id=u_id)
         assert path.split(".")[-1] == "db", f"save file must be a db"
         self.__valid = False
-        self.__con = sqlite3.connect(self.path)
+        if not self.is_created:
+            con = self.get_connection()
+            cur = con.cursor()
+            cur.execute(f"CREATE TABLE tracker({self.u_id})")
+            con.commit()
+            cur.close()
+            con.close()
+        else:
+            con = self.get_connection()
+            cur = con.cursor()
+            res = cur.execute("SELECT name FROM sqlite_master")
+            con.commit()
+            cur.close()
+            con.close()
+            if res is None:
+                con = self.get_connection()
+                cur = con.cursor()
+                cur.execute(f"CREATE TABLE tracker({self.u_id})")
+                con.commit()
+                cur.close()
+                con.close()
+        con = self.get_connection()
+        cur = con.cursor()
+        res = cur.execute("SELECT name FROM sqlite_master")
+        con.commit()
+        cur.close()
+        con.close()
+        assert "tracker" in res
+        # self.__con = sqlite3.connect(self.path)
+    
+    def get_connection(self):
+        return sqlite3.connect(self.path)
     
     def read(self):
-        cur = self.__con.cursor()
-        res = cur.execute("PRAGMA table_info('tracker')")
-        out_names = ["cid", "name", "type", "notnull", "dflt_value", "pk"]
-        output = [
-            {_k:_v for _k,_v in zip(out_names, _rw)} 
-            for _rw in res.fetchall()
-        ]
-        self.column_names = [_rw["name"] for _rw in output]
-        self.__valid = True
-
-    def status_check(self):
-        if self.is_created:
-            self.__valid = len(self.column_names)>0
-        else:
+        try:
+            con = self.get_connection()
+            cur = con.cursor()
+            res = cur.execute("PRAGMA table_info('tracker')")
+            out_names = [
+                "cid", "name", "type", "notnull", "dflt_value", "pk"
+                ]
+            output = [
+                {_k:_v for _k,_v in zip(out_names, _rw)} 
+                for _rw in res.fetchall()
+            ]
+            con.commit()
+            cur.close()
+            con.close()
+            self.column_names = [_rw["name"] for _rw in output]
             self.__valid = True
+        except Exception as e:
+            try:
+                cur.close()
+            except NameError as _e:
+                pass
+            try:
+                con.close()
+            except NameError as _e:
+                pass
+            raise e
     
     def get_current_experiments(self)->List[str]:
-        self.status_check()
         assert self.__valid, f"Run .read() first!"
-        cur = self.__con.cursor()
-        res = cur.execute(f"SELECT {self.u_id} FROM tracker")
-        return [i[0] for i in res.fetchall()]
+        if len(self.column_names) > 0:
+            try:
+                con = self.get_connection()
+                cur = con.cursor()
+                res = cur.execute(f"SELECT {self.u_id} FROM tracker")
+                res = [i[0] for i in res.fetchall()]
+                con.commit()
+                cur.close()
+                con.close()
+            except Exception as e:
+                try:
+                    cur.close()
+                except NameError as _e:
+                    pass
+                try:
+                    con.close()
+                except NameError as _e:
+                    pass
+                raise e
+            return res
+        else:
+            return []
         
     def check_model_exists(self, u_id:str):
         return u_id in self.get_current_experiments()
@@ -338,13 +412,26 @@ class DBTracker(TrackerBase, FileHandler):
             u_id_update (Callable): Function which takes in a individual values
             of self.row i.e. a Dict[str,Any]. Should return an Any.
         """
-        self.status_check()
-        cur = self.__con.cursor()
-        cur.execute(f"""
-            ALTER TABLE tracker
-            ADD {u_id_update};
-        """)
-        self.__con.commit()
+        try:
+            con = self.get_connection()
+            cur = con.cursor()
+            cur.execute(f"""
+                ALTER TABLE tracker
+                ADD {u_id_update};
+            """)
+            con.commit()
+            cur.close()
+            con.close()
+        except Exception as e:
+            try:
+                cur.close()
+            except NameError as _e:
+                pass
+            try:
+                con.close()
+            except NameError as _e:
+                pass
+            raise e
 
     def update_tracker_w_dict(self, row_dict:dict, force_columns:bool=False):
         """Updates the self.rows and self.column_names with the new values 
@@ -356,79 +443,96 @@ class DBTracker(TrackerBase, FileHandler):
             force_columns (bool, optional): Option to force new column names in 
             and avoid exception. Defaults to False.
         """
-        self.status_check()
-        cur = self.__con.cursor()
-        new_row_col_names = [col for col in row_dict.keys()]
-        nw_col_names = self.get_check_consistent_col_names(
-            new_row_col_names=new_row_col_names, force_columns=force_columns)
-        if len(nw_col_names) > 0:
-            self.column_names += nw_col_names
-            for _col in nw_col_names:
+        try:
+            new_row_col_names = [col for col in row_dict.keys()]
+            nw_col_names = self.get_check_consistent_col_names(
+                new_row_col_names=new_row_col_names, force_columns=force_columns)
+            if len(nw_col_names) > 0:
+                self.column_names += nw_col_names
+                for _col in nw_col_names:
+                    con = self.get_connection()
+                    cur = con.cursor()
+                    cur.execute(f"""
+                        ALTER TABLE tracker
+                        ADD {_col};
+                    """)
+                    con.commit()
+                    cur.close()
+                    con.close()
+            if self.check_model_exists(u_id=row_dict[self.u_id]):
+                logger.warning(
+                    "Model already exists in tracker, overwriting relevant values")
+                logger.debug(f"Inserting row with u_id: {row_dict[self.u_id]}")
+                sql_row_fmt = []
+                for _k in row_dict.keys():
+                    if _k != self.u_id:
+                        value = format_sql_value(row_dict[_k])
+                        sql_row_fmt.append(
+                            f"{_k} = {value}"
+                        )
+                con = self.get_connection()
+                cur = con.cursor()
                 cur.execute(f"""
-                    ALTER TABLE tracker
-                    ADD {_col};
+                    UPDATE tracker 
+                    SET {", ".join(sql_row_fmt)}
+                    WHERE {self.u_id} = '{row_dict[self.u_id]}';
                 """)
-                self.__con.commit()
-        if self.check_model_exists(u_id=row_dict[self.u_id]):
-            logger.warning(
-                "Model already exists in tracker, overwriting relevant values")
-            logger.debug(f"Inserting row with u_id: {row_dict[self.u_id]}")
-            sql_row_fmt = []
-            for _k in row_dict.keys():
-                if _k != self.u_id:
-                    value = self.__format_sql_value(row_dict[_k])
-                    sql_row_fmt.append(
-                        f"{_k} = {value}"
-                    )
-            cur.execute(f"""
-                UPDATE tracker 
-                SET {", ".join(sql_row_fmt)}
-                WHERE {self.u_id} = '{row_dict[self.u_id]}';
-            """)
-            self.__con.commit()
-        else:
-            _col_nms_to_set = []
-            _vals_to_set = []
-            for _k in row_dict.keys():
-                _col_nms_to_set.append(_k)
-                _vals_to_set.append(self.__format_sql_value(row_dict[_k]))
-            for _col in self.column_names:
-                if _col not in _col_nms_to_set:
-                    _col_nms_to_set.append(_col)
-                    _vals_to_set.append("NULL")
-            cur.execute(f"""
-                INSERT INTO tracker {', '.join(_col_nms_to_set)}
-                VALUES {', '.join(_vals_to_set)};
-            """)
-            self.__con.commit()
-        
-    
-    def __format_sql_value(self, value:Any)->str:
-        if isinstance(value, bool):
-            if value:
-                value = "TRUE"
+                con.commit()
+                cur.close()
+                con.close()
             else:
-                value = "FALSE"
-        elif isinstance(value, str):
-            value = f"'{value}'"
-        elif isinstance(value, int):
-            value = f"{float(value)}"
-        elif isinstance(value, float):
-            value = f"{value}"
-        else:
-            raise ValueError
-        return value
+                _col_nms_to_set = []
+                _vals_to_set = []
+                for _k in row_dict.keys():
+                    _col_nms_to_set.append(_k)
+                    _vals_to_set.append(format_sql_value(row_dict[_k]))
+                for _col in self.column_names:
+                    if _col not in _col_nms_to_set:
+                        _col_nms_to_set.append(_col)
+                        _vals_to_set.append("NULL")
+                con = self.get_connection()
+                cur = con.cursor()
+                cur.execute(f"""
+                    INSERT INTO tracker {', '.join(_col_nms_to_set)}
+                    VALUES {', '.join(_vals_to_set)};
+                """)
+                con.commit()
+                cur.close()
+                con.close()
+        except Exception as e:
+            try:
+                cur.close()
+            except NameError as _e:
+                pass
+            try:
+                con.close()
+            except NameError as _e:
+                pass
+            raise e
         
-    
     def drop_model(
         self, 
         u_id:str
         ):
-        cur = self.__con.cursor()
-        cur.execute(f"""
-                DELETE FROM tracker WHERE {self.u_id} = '{u_id}';
-            """)
-        self.__con.commit()
+        try:
+            con = self.get_connection()
+            cur = con.cursor()
+            cur.execute(
+                f"DELETE FROM tracker WHERE {self.u_id} = '{u_id}';"
+                )
+            con.commit()
+            cur.close()
+            con.close()
+        except Exception as e:
+            try:
+                cur.close()
+            except NameError as _e:
+                pass
+            try:
+                con.close()
+            except NameError as _e:
+                pass
+            raise e
     
     def rename_model(
         self, 
@@ -437,3 +541,323 @@ class DBTracker(TrackerBase, FileHandler):
         ):
         raise NotImplementedError
     
+def get_format(value: Any)->str:
+    if value is None:
+        return "NULL"
+    elif isinstance(value, bool):
+        return "boolean"
+    elif isinstance(value, float):
+        return "double precision"
+    elif isinstance(value, int):
+        return "double precision"
+    else:
+        return "text"
+
+class PostgresTracker(TrackerBase):
+    
+    def __init__(
+        self,
+        connection_str:str,
+        table_name:str,
+        table_schema:str = "tracking",
+        u_id="model_name"
+        ):
+        assert table_name.islower()
+        assert table_schema.islower()
+        super().__init__(u_id)
+        self.connection_str = connection_str
+        self.table_name = table_name
+        self.table_schema = table_schema
+        
+        # Create schema
+        try:
+            con = self.get_connection()
+            cur = con.cursor()
+            cur.execute(f"CREATE SCHEMA IF NOT EXISTS {table_schema};")
+            con.commit()
+            cur.close()
+            con.close()
+        except Exception as e:
+            try:
+                cur.close()
+            except NameError as _e:
+                pass
+            try:
+                con.close()
+            except NameError as _e:
+                pass
+            raise e
+        
+        # Check whether table exists
+        _tbl_exists = self.check_table_exists()
+        
+        if not _tbl_exists:
+            try:
+                con = self.get_connection()
+                cur = con.cursor()
+                cur.execute(f"CREATE TABLE IF NOT EXISTS {self.table_schema}.{self.table_name} ({self.u_id} TEXT PRIMARY KEY);")
+                con.commit()
+                cur.close()
+                con.close()
+            except Exception as e:
+                try:
+                    cur.close()
+                except NameError as _e:
+                    pass
+                try:
+                    con.close()
+                except NameError as _e:
+                    pass
+                raise e
+        
+        self.column_names = self.get_column_names(
+            schema = self.table_schema,
+            table = self.table_name
+        )
+            
+            
+    def check_table_exists(self)->bool:
+        try:
+            con = self.get_connection()
+            cur = con.cursor()
+            cur.execute(f"""
+                SELECT table_schema, table_name
+                FROM information_schema.tables
+                WHERE table_schema = '{self.table_schema}' AND table_name = '{self.table_name}'
+            """)
+            avail_tbls = cur.fetchall()
+            cur.close()
+            con.close()
+        except Exception as e:
+            try:
+                cur.close()
+            except NameError as _e:
+                pass
+            try:
+                con.close()
+            except NameError as _e:
+                pass
+            raise e
+        col_names = ["table_schema", "table_name"]
+        avail_tbls = [
+            {_k:_v for _k, _v in zip(col_names, avail_tbls[i])} 
+            for i in range(len(avail_tbls))
+        ]
+        
+        if len(avail_tbls) > 0:
+            assert len(avail_tbls) == 1, f"Duplicate tables in database: {avail_tbls}"
+            _tbl_exists = True
+        else:
+            _tbl_exists = False
+        return _tbl_exists
+    
+    
+    def get_connection(self)->psycopg2.extensions.connection:
+        return psycopg2.connect(self.connection_str)
+    
+    
+    def get_column_names(self, schema:str, table:str)->List[str]:
+        try:
+            con = self.get_connection()
+            cur = con.cursor()
+            cur.execute(f"""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = '{self.table_schema}' AND table_name = '{self.table_name}'
+            """)
+            result = cur.fetchall()
+            cur.close()
+            con.close()
+        except Exception as e:
+            try:
+                cur.close()
+            except NameError as _e:
+                pass
+            try:
+                con.close()
+            except NameError as _e:
+                pass
+            raise e
+        return [i[0] for i in result]
+            
+            
+    def get_current_experiments(self)->List[str]:
+        self.column_names = self.get_column_names(
+            schema = self.table_schema,
+            table = self.table_name
+        )
+        if len(self.column_names) > 0:
+            try:
+                con = self.get_connection()
+                cur = con.cursor()
+                cur.execute(f"SELECT {self.u_id} FROM {self.table_schema}.{self.table_name}")
+                res = cur.fetchall()
+                cur.close()
+                con.close()
+                res = [i[0] for i in res]
+            except Exception as e:
+                try:
+                    cur.close()
+                except NameError as _e:
+                    pass
+                try:
+                    con.close()
+                except NameError as _e:
+                    pass
+                raise e
+            return res
+        else:
+            return []
+        
+    def check_model_exists(self, u_id:str):
+        return u_id in self.get_current_experiments()
+        
+                    
+    def write_u_id(self, u_id_update:str):
+        """Writes a column to each row named self.u_id according to the function
+        provided in u_id_update. Useful when a tracker has previously been 
+        defined with a different u_id to the one required.
+
+        Args:
+            u_id_update (Callable): Function which takes in a individual values
+            of self.row i.e. a Dict[str,Any]. Should return an Any.
+        """
+        assert isinstance(u_id_update, str)
+        assert u_id_update.islower()
+        try:
+            con = self.get_connection()
+            cur = con.cursor()
+            cur.execute(f"""
+                ALTER TABLE {self.table_schema}.{self.table_name}
+                ADD {u_id_update} TEXT;
+            """)
+            con.commit()
+            cur.close()
+            con.close()
+        except Exception as e:
+            try:
+                cur.close()
+            except NameError as _e:
+                pass
+            try:
+                con.close()
+            except NameError as _e:
+                pass
+            raise e
+
+    def update_tracker_w_dict(self, row_dict:Dict[str,Any], force_columns:bool=False):
+        """Updates the self.rows and self.column_names with the new values 
+        provided in row_dict
+
+        Args:
+            row_dict (dict): dictionary containing {column:values} to be added 
+            to the tracker
+            force_columns (bool, optional): Option to force new column names in 
+            and avoid exception. Defaults to False.
+        """
+        self.column_names = self.get_column_names(
+            schema = self.table_schema,
+            table = self.table_name
+        )
+        try:
+            new_row_col_names = [col for col in row_dict.keys()]
+            nw_col_names = self.get_check_consistent_col_names(
+                new_row_col_names=new_row_col_names, force_columns=force_columns)
+            if len(nw_col_names) > 0:
+                self.column_names += nw_col_names
+                for _col in nw_col_names:
+                    assert _col.islower()
+                    con = self.get_connection()
+                    cur = con.cursor()
+                    _val_type = get_format(row_dict[_col])
+                    cur.execute(f"""
+                        ALTER TABLE {self.table_schema}.{self.table_name}
+                        ADD {_col} {_val_type};
+                    """)
+                    con.commit()
+                    cur.close()
+                    con.close()
+            if self.check_model_exists(u_id=row_dict[self.u_id]):
+                logger.warning(
+                    "Model already exists in tracker, overwriting relevant values")
+                logger.debug(f"Inserting row with u_id: {row_dict[self.u_id]}")
+                sql_row_fmt = []
+                for _k in row_dict.keys():
+                    if _k != self.u_id:
+                        assert _k.islower()
+                        value = format_sql_value(row_dict[_k])
+                        sql_row_fmt.append(
+                            f"{_k} = {value}"
+                        )
+                con = self.get_connection()
+                cur = con.cursor()
+                cur.execute(f"""
+                    UPDATE {self.table_schema}.{self.table_name} 
+                    SET {", ".join(sql_row_fmt)}
+                    WHERE {self.u_id} = '{row_dict[self.u_id]}';
+                """)
+                con.commit()
+                cur.close()
+                con.close()
+            else:
+                _col_nms_to_set = []
+                _vals_to_set = []
+                for _k in row_dict.keys():
+                    assert _k.islower()
+                    _col_nms_to_set.append(_k)
+                    _vals_to_set.append(format_sql_value(row_dict[_k]))
+                for _col in self.column_names:
+                    assert _col.islower()
+                    if _col not in _col_nms_to_set:
+                        _col_nms_to_set.append(_col)
+                        _vals_to_set.append("NULL")
+                con = self.get_connection()
+                cur = con.cursor()
+                cur.execute(f"""
+                    INSERT INTO {self.table_schema}.{self.table_name} ({', '.join(_col_nms_to_set)})
+                    VALUES ({', '.join(_vals_to_set)});
+                """)
+                con.commit()
+                cur.close()
+                con.close()
+        except Exception as e:
+            try:
+                cur.close()
+            except NameError as _e:
+                pass
+            try:
+                con.close()
+            except NameError as _e:
+                pass
+            raise e
+        
+    def drop_model(
+        self, 
+        u_id:str
+        ):
+        try:
+            con = self.get_connection()
+            cur = con.cursor()
+            cur.execute(
+                f"DELETE FROM {self.table_schema}.{self.table_name} WHERE {self.u_id} = '{u_id}';"
+                )
+            con.commit()
+            cur.close()
+            con.close()
+        except Exception as e:
+            try:
+                cur.close()
+            except NameError as _e:
+                pass
+            try:
+                con.close()
+            except NameError as _e:
+                pass
+            raise e
+    
+    def rename_model(
+        self, 
+        u_id:str, 
+        new_u_id:str
+        ):
+        raise NotImplementedError
