@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from typing import Any, Callable, Dict, List, Optional
 import os
+import time
 
 __all__ = [
     "Metric", 
@@ -34,6 +35,10 @@ class Metric:
             with open(self.save_path, "w") as f:
                 f.write(f"step,{name}")
                 f.write("\n")
+        making_file = True
+        while making_file:
+            time.sleep(1)
+            making_file = not os.path.isfile(self.save_path)
             
         
     def add_value(self, label:str, value:Any)->None:

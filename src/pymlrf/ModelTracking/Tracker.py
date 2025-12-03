@@ -338,9 +338,9 @@ class SQLiteTracker(TrackerBase, FileHandler):
         cur = con.cursor()
         res = cur.execute("SELECT name FROM sqlite_master")
         con.commit()
+        assert "tracker" in res
         cur.close()
         con.close()
-        assert "tracker" in res
         # self.__con = sqlite3.connect(self.path)
     
     def get_connection(self):
@@ -861,3 +861,17 @@ class PostgresTracker(TrackerBase):
         new_u_id:str
         ):
         raise NotImplementedError
+    
+    def tracker_to_pandas_df(self)->pd.DataFrame:
+        try:
+            con = self.get_connection()
+            sql = f"select * from {self.table_schema}.{self.table_name};"
+            dat = pd.read_sql_query(sql, con)
+            con.close()
+        except Exception as e:
+            try:
+                con.close()
+            except NameError as _e:
+                pass
+            raise e    
+        return dat
