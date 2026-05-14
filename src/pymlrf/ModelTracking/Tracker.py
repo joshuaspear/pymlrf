@@ -770,10 +770,19 @@ class PostgresTracker(TrackerBase):
                     con = self.get_connection()
                     cur = con.cursor()
                     _val_type = get_format(row_dict[_col])
-                    cur.execute(f"""
-                        ALTER TABLE {self.table_schema}.{self.table_name}
-                        ADD {_col} {_val_type};
-                    """)
+                    try:
+                        cur.execute(f"""
+                            ALTER TABLE {self.table_schema}.{self.table_name}
+                            ADD {_col} {_val_type};
+                        """)
+                    except psycopg2.errors.SyntaxError as e:
+                        logger.debug(
+                            f"""Syntax error on column: {_col}
+                            Value: {row_dict[_col]}
+                            Inferred type: {_val_type}
+                            """
+                            )
+                        raise e
                     con.commit()
                     cur.close()
                     con.close()
