@@ -497,9 +497,9 @@ class SQLiteTracker(TrackerBase, FileHandler):
                 con = self.get_connection()
                 cur = con.cursor()
                 cur.execute(f"""
-                    INSERT INTO tracker {', '.join(_col_nms_to_set)}
-                    VALUES {', '.join(_vals_to_set)};
-                """)
+                    INSERT INTO tracker ({', '.join(_col_nms_to_set)})
+                    VALUES ({', '.join(["?"]*len(_vals_to_set))});
+                """, _vals_to_set)
                 con.commit()
                 cur.close()
                 con.close()
