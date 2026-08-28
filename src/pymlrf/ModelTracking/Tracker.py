@@ -324,10 +324,11 @@ class SQLiteTracker(TrackerBase, FileHandler):
             con = self.get_connection()
             cur = con.cursor()
             res = cur.execute("SELECT name FROM sqlite_master")
+            avail_tbls = [_tab[0] for _tab in res.fetchall()]
             con.commit()
             cur.close()
             con.close()
-            if res is None:
+            if "tracker" not in avail_tbls:
                 con = self.get_connection()
                 cur = con.cursor()
                 cur.execute(f"CREATE TABLE tracker({self.u_id})")
@@ -468,19 +469,21 @@ class SQLiteTracker(TrackerBase, FileHandler):
                     "Model already exists in tracker, overwriting relevant values")
                 logger.debug(f"Inserting row with u_id: {row_dict[self.u_id]}")
                 sql_row_fmt = []
+                sql_row_values = []
                 for _k in row_dict.keys():
                     if _k != self.u_id:
-                        value = format_sql_value(row_dict[_k])
+                        value = row_dict[_k]
                         sql_row_fmt.append(
-                            f"{_k} = {value}"
+                            f"{_k} = ?"
                         )
+                        sql_row_values.append(value)
                 con = self.get_connection()
                 cur = con.cursor()
                 cur.execute(f"""
                     UPDATE tracker 
                     SET {", ".join(sql_row_fmt)}
                     WHERE {self.u_id} = '{row_dict[self.u_id]}';
-                """)
+                """, sql_row_values)
                 con.commit()
                 cur.close()
                 con.close()
@@ -489,7 +492,7 @@ class SQLiteTracker(TrackerBase, FileHandler):
                 _vals_to_set = []
                 for _k in row_dict.keys():
                     _col_nms_to_set.append(_k)
-                    _vals_to_set.append(format_sql_value(row_dict[_k]))
+                    _vals_to_set.append(row_dict[_k])
                 for _col in self.column_names:
                     if _col not in _col_nms_to_set:
                         _col_nms_to_set.append(_col)
@@ -544,6 +547,20 @@ class SQLiteTracker(TrackerBase, FileHandler):
         new_u_id:str
         ):
         raise NotImplementedError
+    
+    def tracker_to_pandas_df(self)->pd.DataFrame:
+        try:
+            con = self.get_connection()
+            sql = f"select * from tracker;"
+            dat = pd.read_sql_query(sql, con)
+            con.close()
+        except Exception as e:
+            try:
+                con.close()
+            except NameError as _e:
+                pass
+            raise e    
+        return dat
     
 def get_format(value: Any)->str:
     if value is None:
