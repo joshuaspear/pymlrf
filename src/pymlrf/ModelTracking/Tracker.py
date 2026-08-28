@@ -338,7 +338,11 @@ class SQLiteTracker(TrackerBase, FileHandler):
         cur = con.cursor()
         res = cur.execute("SELECT name FROM sqlite_master")
         con.commit()
-        assert "tracker" in res
+        avail_tbls = [_tab[0] for _tab in res.fetchall()]
+        assert "tracker" in avail_tbls, f"""
+        SQL query: {cur.fetchall()}
+        """
+        
         cur.close()
         con.close()
         # self.__con = sqlite3.connect(self.path)
