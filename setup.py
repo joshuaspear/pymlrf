@@ -9,7 +9,7 @@ README = (HERE / "README.md").read_text()
 
 setuptools.setup(
     name='pymlrf',
-    version='2.0.0',
+    version='3.0.0',
     description="",
     long_description=README,
     packages=setuptools.find_packages(where="src"),
